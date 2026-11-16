@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'app.tapsi'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.tapsi'
+        minSdk 26
+        targetSdk 34
+        // Raise versionCode by 1 for every new build you send out.
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // The same key signs every build, so a new APK installs over the old one
+    // and the data on the phone is kept. Keep this repository private.
+    signingConfigs {
+        shared {
+            storeFile file('../tapsi.keystore')
+            storePassword 'tapsi-app'
+            keyAlias 'tapsi'
+            keyPassword 'tapsi-app'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.shared
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

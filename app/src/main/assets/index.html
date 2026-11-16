@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#ffffff">
+<title>Tapsi</title>
+<style>
+:root{
+  --bg:#ffffff; --fg:#111111;
+  --soft:color-mix(in srgb,var(--fg) 7%,transparent);
+  --line:color-mix(in srgb,var(--fg) 16%,transparent);
+  --muted:color-mix(in srgb,var(--fg) 58%,transparent);
+  --sheet:color-mix(in srgb,var(--bg) 94%,var(--fg));
+  --icon:64px; --num:16px; --cols:3;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);color:var(--fg);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  overscroll-behavior:none;transition:background .2s;
+}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+#app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 8px}
+header h1{margin:0;font-size:26px;font-weight:750;letter-spacing:-.02em;line-height:1.1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header .date{font-size:13px;color:var(--muted);margin-top:3px}
+.icon-btn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:none}
+.icon-btn:active{background:var(--soft)}
+.icon-btn svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+#grid{display:grid;grid-template-columns:repeat(var(--cols),1fr);gap:6px 0;padding:12px 10px 120px;align-content:start;flex:1}
+.tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;border-radius:18px;
+  touch-action:pan-y;transition:transform .15s,background .15s;position:relative}
+.tile.held{background:var(--soft);transform:scale(1.06)}
+.tile.dragging{transition:none;z-index:5;background:var(--soft);box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.tile.pop .ico{animation:pop .22s ease-out}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(.86)}100%{transform:scale(1)}}
+.ico{width:var(--icon);height:var(--icon);max-width:100%;display:grid;place-items:center;pointer-events:none;flex:none}
+.ico img{width:100%;height:100%;object-fit:contain;display:block}
+.ico span{font-size:calc(var(--icon)*.8);line-height:1}
+.count{font-size:var(--num);font-weight:650;font-variant-numeric:tabular-nums;min-width:2.1em;text-align:center;
+  padding:.12em .5em;border:1.5px solid var(--line);border-radius:.55em;pointer-events:none}
+.count.zero{color:var(--muted)}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:80px 30px;line-height:1.5}
+#fab{position:fixed;right:max(20px,calc(50% - 240px));bottom:calc(24px + env(safe-area-inset-bottom));
+  width:60px;height:60px;border-radius:50%;background:var(--fg);color:var(--bg);display:grid;place-items:center;
+  box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:3}
+#fab:active{transform:scale(.94)}
+#fab svg{width:28px;height:28px;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;fill:none}
+
+.sheet-wrap{position:fixed;inset:0;z-index:10}
+.backdrop{position:absolute;inset:0;background:rgba(0,0,0,.4);opacity:0;transition:opacity .2s}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;max-height:92%;display:flex;flex-direction:column;
+  background:var(--sheet);border-radius:22px 22px 0 0;transform:translateY(100%);transition:transform .22s ease-out;
+  padding-bottom:env(safe-area-inset-bottom)}
+.sheet-wrap.open .backdrop{opacity:1}
+.sheet-wrap.open .sheet{transform:none}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:12px 10px 4px 20px}
+.sheet-head h2{margin:0;font-size:18px;font-weight:700}
+.sheet-body{overflow-y:auto;padding:6px 20px 28px;overscroll-behavior:contain}
+.label{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 0 10px}
+.field{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:transparent;outline:none;
+  -webkit-user-select:text;user-select:text}
+.field:focus{border-color:var(--fg)}
+.btn{padding:12px 16px;border-radius:12px;background:var(--soft);font-weight:600;text-align:center}
+.btn:active{opacity:.7}
+.btn.danger{color:#d0342c}
+.btn.wide{width:100%;display:block}
+
+.picker{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.pick{aspect-ratio:1;border-radius:14px;background:var(--soft);display:grid;place-items:center;font-size:30px;line-height:1;padding:8px;position:relative}
+.pick img{width:100%;height:100%;object-fit:contain}
+.pick:active{transform:scale(.94)}
+.pick.add{border:1.5px dashed var(--line);background:none}
+.pick.add svg{width:26px;height:26px;stroke:currentColor;stroke-width:2;stroke-linecap:round;fill:none}
+.pick .x{position:absolute;top:-5px;right:-5px;width:22px;height:22px;border-radius:50%;background:var(--fg);color:var(--bg);
+  font-size:13px;font-weight:700;display:grid;place-items:center}
+.hint{font-size:13px;color:var(--muted);line-height:1.45;margin:8px 0 0}
+
+.d-top{display:flex;align-items:center;gap:14px}
+.d-icon{width:72px;height:72px;border-radius:18px;background:var(--soft);display:grid;place-items:center;padding:8px;flex:none;position:relative}
+.d-icon .ico{--icon:56px}
+.d-icon small{position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);
+  font-size:10px;font-weight:650;padding:2px 7px;border-radius:9px;white-space:nowrap}
+.stepper{display:flex;align-items:center;justify-content:center;gap:22px;margin:22px 0 2px}
+.stepper button{width:54px;height:54px;border-radius:50%;background:var(--soft);font-size:28px;line-height:1}
+.stepper button:active{opacity:.6}
+.stepper button:disabled{opacity:.3}
+.stepper .big{font-size:52px;font-weight:750;font-variant-numeric:tabular-nums;min-width:1.6em;text-align:center;line-height:1}
+.center{text-align:center;color:var(--muted);font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px}
+.kpi{background:var(--soft);border-radius:14px;padding:12px 8px;text-align:center}
+.kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.chart-head{display:flex;align-items:center;justify-content:space-between;margin:22px 0 6px}
+.chart-head .label{margin:0}
+.nav{display:flex;align-items:center;gap:2px;font-size:13px;color:var(--muted)}
+.nav button{width:34px;height:34px;border-radius:50%;font-size:20px;color:var(--fg)}
+.nav button:disabled{opacity:.25}
+.bars{display:flex;align-items:flex-end;gap:6px;height:150px}
+.bars.hours{gap:2px;height:110px}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
+.col .v{font-size:12px;font-weight:650;font-variant-numeric:tabular-nums;margin-bottom:3px}
+.col .bar{width:100%;max-width:34px;border-radius:5px 5px 2px 2px;background:var(--fg);opacity:.45;min-height:2px}
+.col.hi .bar{opacity:1}
+.col.nil .bar{opacity:.14}
+.col .l{font-size:11px;color:var(--muted);margin-top:5px;height:14px;white-space:nowrap}
+.col.hi .l{color:var(--fg);font-weight:650}
+
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.sw{width:42px;height:42px;border-radius:50%;border:1.5px solid var(--line);position:relative;overflow:hidden}
+.sw.on{outline:2.5px solid var(--fg);outline-offset:2px}
+.sw.wheel{background:conic-gradient(#f44,#fb3,#ee4,#4c6,#3cf,#56f,#c4f,#f44)}
+.pad{position:relative;height:150px;border-radius:14px;margin-top:14px;touch-action:none;border:1.5px solid var(--line);
+  background:linear-gradient(to bottom,#fff,rgba(255,255,255,0) 50%,rgba(0,0,0,0) 50%,#000),linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+.pad i{position:absolute;width:24px;height:24px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.55);transform:translate(-50%,-50%);pointer-events:none}
+.row{display:flex;align-items:center;gap:12px;margin:10px 0}
+.row .grow{flex:1;min-width:0}
+.row .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .sub{font-size:12px;color:var(--muted)}
+.row .ico{--icon:38px}
+input[type=range]{width:100%;accent-color:var(--fg);height:30px}
+.mini{display:flex;align-items:center;gap:12px}
+.mini button{width:38px;height:38px;border-radius:50%;background:var(--soft);font-size:20px}
+.mini b{min-width:1.2em;text-align:center}
+.link{font-size:13px;font-weight:600;padding:8px 10px;border-radius:10px;background:var(--soft)}
+.link.danger{color:#d0342c}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div style="min-width:0">
+      <h1 id="title"></h1>
+      <div class="date" id="date"></div>
+    </div>
+    <button class="icon-btn" id="gear" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+  <main id="grid"></main>
+</div>
+<button id="fab" aria-label="Add counter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+<input type="file" id="file" accept="image/*" hidden>
+
+<script>
+'use strict';
+/* ---------- tiny helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const k in (props || {})) {
+    const v = props[k];
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'html') el.innerHTML = v;
+    else if (k === 'style') Object.assign(el.style, v);
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k in el) el[k] = v;
+    else el.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) {
+    if (c == null || c === false) continue;
+    el.append(c.nodeType ? c : document.createTextNode(c));
+  }
+  return el;
+}
+const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(k => k != null && k !== false));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+const X_SVG = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const PLUS_SVG = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
+
+/* ---------- storage (IndexedDB, localStorage fallback) ---------- */
+const store = {
+  db: null,
+  async open() {
+    try {
+      this.db = await new Promise((res, rej) => {
+        const r = indexedDB.open('tapsi', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('kv');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+    } catch (e) { this.db = null; }
+  },
+  get(k) {
+    if (this.db) return new Promise(res => {
+      const r = this.db.transaction('kv').objectStore('kv').get(k);
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => res(undefined);
+    });
+    try { return Promise.resolve(JSON.parse(localStorage.getItem('tapsi:' + k)) ?? undefined); }
+    catch (e) { return Promise.resolve(undefined); }
+  },
+  set(k, v) {
+    try {
+      if (this.db) this.db.transaction('kv', 'readwrite').objectStore('kv').put(v, k);
+      else localStorage.setItem('tapsi:' + k, JSON.stringify(v));
+    } catch (e) { console.error('save failed', e); }
+  }
+};
+
+/* ---------- state ---------- */
+const BUILTIN = ['💧','☕','🍵','🥤','🍺','🍷','🚬','💊','🏋️','🏃','🚶','🧘','📚','📝','💻','📱','🎮','🛏️','🚿','🦷','🍎','🍫','🍔','🙏','💸','🐶','🌱','🎵','❤️','⭐'];
+const PRESETS = ['#ffffff','#111111','#f6efe4','#ffd6e0','#d9ecff','#dff5e1','#e8defc','#ffe9b8'];
+let S = { appName: 'Tapsi', bg: '#ffffff', iconSize: 64, numSize: 16, cols: 3, items: [] };
+let icons = [];   // saved custom icons: {id, src}
+let events = [];  // every tap: {i: itemId, t: timestamp}
+const saveMeta = () => store.set('meta', S);
+const saveIcons = () => store.set('icons', icons);
+const saveEvents = () => store.set('events', events);
+
+/* ---------- dates ---------- */
+const DAY = 864e5;
+const startOfDay = (t = Date.now()) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const startOfWeek = t => { const d = new Date(startOfDay(t)); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
+const addDays = (t, n) => { const d = new Date(t); d.setDate(d.getDate() + n); return d.getTime(); };
+const fmt = (t, o) => new Date(t).toLocaleDateString('en-GB', o);
+let shownDay = startOfDay();
+
+const todayCount = id => { const s = startOfDay(); let n = 0; for (const e of events) if (e.i === id && e.t >= s) n++; return n; };
+function addTap(id) { events.push({ i: id, t: Date.now() }); saveEvents(); }
+function undoTap(id) {
+  const s = startOfDay();
+  for (let k = events.length - 1; k >= 0; k--) {
+    if (events[k].i === id && events[k].t >= s) { events.splice(k, 1); saveEvents(); return true; }
+  }
+  return false;
+}
+
+/* ---------- theme ---------- */
+function applyTheme() {
+  const hex = S.bg.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(c => c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4));
+  const lum = .2126 * r + .7152 * g + .0722 * b;
+  const st = document.documentElement.style;
+  st.setProperty('--bg', S.bg);
+  st.setProperty('--fg', lum > .4 ? '#111111' : '#ffffff');
+  st.setProperty('--icon', S.iconSize + 'px');
+  st.setProperty('--num', S.numSize + 'px');
+  st.setProperty('--cols', S.cols);
+  $('meta[name=theme-color]').content = S.bg;
+  document.title = S.appName;
+  try { if (window.Android) window.Android.setBg(S.bg, lum > .4); } catch (e) {}
+}
+
+function hslHex(hh, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => { const k = (n + hh / 30) % 12; const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(255 * c).toString(16).padStart(2, '0'); };
+  return '#' + f(0) + f(8) + f(4);
+}
+
+/* ---------- icons ---------- */
+function iconEl(ref) {
+  const box = h('div', { class: 'ico' });
+  if (ref && ref.c) {
+    const ic = icons.find(x => x.id === ref.c);
+    if (ic) { box.append(h('img', { src: ic.src, alt: '', draggable: false })); return box; }
+  }
+  box.append(h('span', null, (ref && ref.e) || '❔'));
+  return box;
+}
+function importImage(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const N = 256, c = document.createElement('canvas');
+      c.width = c.height = N;
+      const k = Math.min(N / img.width, N / img.height), w = img.width * k, hh = img.height * k;
+      c.getContext('2d').drawImage(img, (N - w) / 2, (N - hh) / 2, w, hh);
+      URL.revokeObjectURL(url);
+      const ic = { id: uid(), src: c.toDataURL('image/png') };
+      icons.unshift(ic); saveIcons(); res(ic);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not read that image')); };
+    img.src = url;
+  });
+}
+function pickFile() {
+  return new Promise(res => {
+    const f = $('#file');
+    f.value = '';
+    f.onchange = () => res(f.files[0] || null);
+    f.click();
+  });
+}
+
+/* ---------- sheets ---------- */
+const sheets = [];
+function openSheet(title, build, onClose) {
+  const body = h('div', { class: 'sheet-body' });
+  const wrap = h('div', { class: 'sheet-wrap' },
+    h('div', { class: 'backdrop', onclick: () => closeSheet(wrap) }),
+    h('div', { class: 'sheet', role: 'dialog' },
+      h('div', { class: 'sheet-head' }, h('h2', null, title),
+        h('button', { class: 'icon-btn', 'aria-label': 'Close', html: X_SVG, onclick: () => closeSheet(wrap) })),
+      body));
+  wrap._onClose = onClose;
+  document.body.append(wrap);
+  sheets.push(wrap);
+  wrap.offsetHeight; // force layout so the slide-in animates
+  wrap.classList.add('open');
+  build(body, () => closeSheet(wrap));
+  return wrap;
+}
+function closeSheet(wrap) {
+  wrap = wrap || sheets[sheets.length - 1];
+  const i = sheets.indexOf(wrap);
+  if (i < 0) return false;
+  sheets.splice(i, 1);
+  if (document.activeElement) document.activeElement.blur();
+  wrap.classList.remove('open');
+  setTimeout(() => wrap.remove(), 230);
+  if (wrap._onClose) wrap._onClose();
+  return true;
+}
+window.tapsiBack = () => closeSheet(); // used by the Android back button
+
+function confirmBtn(label, cls, fn) {
+  let armed = false, timer;
+  const b = h('button', { class: cls, onclick: () => {
+    if (armed) return fn();
+    armed = true; b.textContent = 'Tap again to confirm';
+    timer = setTimeout(() => { armed = false; b.textContent = label; }, 3000);
+  } }, label);
+  return b;
+}
+
+/* ---------- icon picker ---------- */
+function openPicker(title, onPick) {
+  openSheet(title, (body, close) => {
+    const draw = () => {
+      fill(body,
+        h('div', { class: 'label', style: { marginTop: '8px' } }, 'Your icons'),
+        h('div', { class: 'picker' },
+          h('button', { class: 'pick add', 'aria-label': 'Import from gallery', html: PLUS_SVG, onclick: async () => {
+            const f = await pickFile();
+            if (!f) return;
+            try { const ic = await importImage(f); close(); onPick({ c: ic.id }); }
+            catch (e) { draw(); body.prepend(h('p', { class: 'hint' }, e.message)); }
+          } }),
+          icons.map(ic => h('button', { class: 'pick', onclick: () => { close(); onPick({ c: ic.id }); } },
+            h('img', { src: ic.src, alt: '', draggable: false })))),
+        h('p', { class: 'hint' }, 'Tap + to add a picture from your gallery. It stays saved here.'),
+        h('div', { class: 'label' }, 'Built-in'),
+        h('div', { class: 'picker' },
+          BUILTIN.map(e => h('button', { class: 'pick', onclick: () => { close(); onPick({ e }); } }, e))));
+    };
+    draw();
+  });
+}
+
+/* ---------- charts ---------- */
+function bars(values, labels, hi, cls) {
+  const max = Math.max(1, ...values);
+  return h('div', { class: 'bars ' + (cls || '') }, values.map((v, k) =>
+    h('div', { class: 'col' + (k === hi ? ' hi' : '') + (v ? '' : ' nil') },
+      cls ? null : h('div', { class: 'v' }, v || ''),
+      h('div', { class: 'bar', style: { height: (v / max * 100) + '%' } }),
+      h('div', { class: 'l' }, labels[k] || ''))));
+}
+
+/* ---------- detail (long press) ---------- */
+function openDetail(item) {
+  let week = startOfWeek(Date.now());
+  openSheet('Details', (body, close) => {
+    const draw = () => {
+      const evs = events.filter(e => e.i === item.id);
+      const today = todayCount(item.id);
+      const thisWeek = evs.filter(e => e.t >= startOfWeek(Date.now())).length;
+      const first = evs.length ? Math.min(...evs.map(e => e.t)) : Date.now();
+      const days = Math.round((startOfDay() - startOfDay(first)) / DAY) + 1;
+      const avg = evs.length / days;
+
+      const perDay = Array(7).fill(0);
+      for (const e of evs) { const k = Math.round((startOfDay(e.t) - week) / DAY); if (k >= 0 && k < 7) perDay[k]++; }
+      const isThisWeek = week === startOfWeek(Date.now());
+      const todayIdx = isThisWeek ? (new Date().getDay() + 6) % 7 : -1;
+
+      const perHour = Array(24).fill(0);
+      for (const e of evs) perHour[new Date(e.t).getHours()]++;
+      const peak = perHour.indexOf(Math.max(...perHour));
+      const hourLabels = Array.from({ length: 24 }, (_, k) => k % 6 === 0 ? k + ':00' : '');
+
+      const nameField = h('input', { class: 'field', value: item.name || '', placeholder: 'Name (optional)', maxLength: 30,
+        oninput: () => { item.name = nameField.value.trim(); saveMeta(); } });
+
+      fill(body,
+        h('div', { class: 'd-top' },
+          h('button', { class: 'd-icon', 'aria-label': 'Change icon', onclick: () =>
+            openPicker('Change icon', ref => { item.icon = ref; saveMeta(); draw(); }) },
+            iconEl(item.icon), h('small', null, 'change')),
+          nameField),
+        h('div', { class: 'stepper' },
+          h('button', { 'aria-label': 'Minus one', disabled: !today, onclick: () => { undoTap(item.id); draw(); } }, '−'),
+          h('div', { class: 'big' }, today),
+          h('button', { 'aria-label': 'Plus one', onclick: () => { addTap(item.id); draw(); } }, '+')),
+        h('div', { class: 'center' }, 'today'),
+        h('div', { class: 'kpis' },
+          h('div', { class: 'kpi' }, h('b', null, thisWeek), h('span', null, 'this week')),
+          h('div', { class: 'kpi' }, h('b', null, avg >= 10 ? Math.round(avg) : avg.toFixed(1)), h('span', null, 'per day')),
+          h('div', { class: 'kpi' }, h('b', null, evs.length), h('span', null, 'all time'))),
+        h('div', { class: 'chart-head' },
+          h('div', { class: 'label' }, 'By day'),
+          h('div', { class: 'nav' },
+            h('button', { 'aria-label': 'Previous week', onclick: () => { week = addDays(week, -7); draw(); } }, '‹'),
+            isThisWeek ? 'This week' : fmt(week, { day: 'numeric', month: 'short' }) + ' – ' + fmt(addDays(week, 6), { day: 'numeric', month: 'short' }),
+            h('button', { 'aria-label': 'Next week', disabled: isThisWeek, onclick: () => { week = addDays(week, 7); draw(); } }, '›'))),
+        bars(perDay, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], todayIdx),
+        h('div', { class: 'chart-head' },
+          h('div', { class: 'label' }, 'By time of day'),
+          h('div', { class: 'nav' }, evs.length ? 'Mostly around ' + peak + ':00' : 'No taps yet')),
+        bars(perHour, hourLabels, evs.length ? peak : -1, 'hours'),
+        h('div', { style: { height: '26px' } }),
+        confirmBtn('Delete this counter', 'btn danger wide', () => {
+          S.items = S.items.filter(x => x !== item);
+          events = events.filter(e => e.i !== item.id);
+          saveMeta(); saveEvents(); close();
+        }));
+    };
+    draw();
+  }, renderMain);
+}
+
+/* ---------- settings ---------- */
+function openSettings() {
+  openSheet('Settings', body => {
+    let padOpen = !PRESETS.includes(S.bg);
+    const colourPad = () => {
+      const p = S.pin || { x: .58, y: .12 }, pin = h('i'), pad = h('div', { class: 'pad' }, pin);
+      const clamp = v => Math.max(0, Math.min(1, v));
+      const col = () => hslHex(p.x * 359, 100, 96 - p.y * 88);
+      const place = () => { pin.style.left = p.x * 100 + '%'; pin.style.top = p.y * 100 + '%'; pin.style.background = col(); };
+      const move = e => { const r = pad.getBoundingClientRect();
+        p.x = clamp((e.clientX - r.left) / r.width); p.y = clamp((e.clientY - r.top) / r.height);
+        S.pin = p; S.bg = col(); applyTheme(); place(); };
+      pad.addEventListener('pointerdown', e => { try { pad.setPointerCapture(e.pointerId); } catch (err) {} move(e); });
+      pad.addEventListener('pointermove', e => { if (e.buttons) move(e); });
+      pad.addEventListener('pointerup', () => { saveMeta(); draw(); });
+      place();
+      return pad;
+    };
+    const draw = () => {
+      const weekAgo = addDays(startOfDay(), -6);
+      const nameField = h('input', { class: 'field', value: S.appName, maxLength: 24, placeholder: 'App name',
+        oninput: () => { S.appName = nameField.value.trim() || 'Tapsi'; saveMeta(); applyTheme(); renderHeader(); } });
+      const setBg = c => { S.bg = c; saveMeta(); applyTheme(); draw(); };
+      const custom = !PRESETS.includes(S.bg);
+      const used = new Set(S.items.map(x => x.icon && x.icon.c).filter(Boolean));
+
+      fill(body,
+        h('div', { class: 'label', style: { marginTop: '8px' } }, 'App name'),
+        nameField,
+        h('div', { class: 'label' }, 'Background'),
+        h('div', { class: 'swatches' },
+          PRESETS.map(c => h('button', { class: 'sw' + (S.bg === c ? ' on' : ''), 'aria-label': 'Background ' + c,
+            style: { background: c }, onclick: () => setBg(c) })),
+          h('button', { class: 'sw wheel' + (custom ? ' on' : ''), 'aria-label': 'Custom colour',
+            onclick: () => { padOpen = !padOpen; draw(); } })),
+        padOpen ? colourPad() : null,
+        padOpen ? h('p', { class: 'hint' }, 'Drag the pin to pick any colour.') : null,
+        h('div', { class: 'label' }, 'Icon size'),
+        h('input', { type: 'range', min: 36, max: 112, step: 4, value: S.iconSize,
+          oninput: e => { S.iconSize = +e.target.value; applyTheme(); }, onchange: saveMeta }),
+        h('div', { class: 'label' }, 'Number size'),
+        h('input', { type: 'range', min: 11, max: 30, step: 1, value: S.numSize,
+          oninput: e => { S.numSize = +e.target.value; applyTheme(); }, onchange: saveMeta }),
+        h('div', { class: 'label' }, 'Icons per row'),
+        h('div', { class: 'mini' },
+          h('button', { 'aria-label': 'Fewer per row', onclick: () => { S.cols = Math.max(2, S.cols - 1); saveMeta(); applyTheme(); draw(); } }, '−'),
+          h('b', null, S.cols),
+          h('button', { 'aria-label': 'More per row', onclick: () => { S.cols = Math.min(5, S.cols + 1); saveMeta(); applyTheme(); draw(); } }, '+')),
+
+        h('div', { class: 'label' }, 'Counters & stats'),
+        S.items.length ? S.items.map(it => {
+          let wk = 0, all = 0;
+          for (const e of events) if (e.i === it.id) { all++; if (e.t >= weekAgo) wk++; }
+          return h('div', { class: 'row' }, iconEl(it.icon),
+            h('div', { class: 'grow' },
+              h('div', { class: 'name' }, it.name || 'Unnamed'),
+              h('div', { class: 'sub' }, todayCount(it.id) + ' today · ' + wk + ' in 7 days · ' + all + ' total')),
+            confirmBtn('Delete', 'link danger', () => {
+              S.items = S.items.filter(x => x !== it);
+              events = events.filter(e => e.i !== it.id);
+              saveMeta(); saveEvents(); draw();
+            }));
+        }) : h('p', { class: 'hint' }, 'No counters yet.'),
+        h('button', { class: 'btn wide', style: { marginTop: '12px' }, onclick: newCounter }, '+ Add counter'),
+
+        h('div', { class: 'label' }, 'Saved icons'),
+        icons.length ? h('div', { class: 'picker' }, icons.map(ic =>
+          h('div', { class: 'pick' }, h('img', { src: ic.src, alt: '' }),
+            used.has(ic.id) ? null : h('button', { class: 'x', 'aria-label': 'Remove icon', onclick: () => {
+              icons = icons.filter(x => x !== ic); saveIcons(); draw(); } }, '×'))))
+          : null,
+        h('p', { class: 'hint' }, icons.length
+          ? 'Pictures you imported. Ones in use by a counter can’t be removed.'
+          : 'Pictures you import from your gallery are kept here.'));
+    };
+    draw();
+    body._redraw = draw;
+  }, renderMain);
+}
+
+/* ---------- main screen ---------- */
+function renderHeader() {
+  $('#title').textContent = S.appName;
+  $('#date').textContent = fmt(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' });
+}
+const G = { held: false };
+function renderMain() {
+  shownDay = startOfDay();
+  renderHeader();
+  const grid = $('#grid');
+  if (!S.items.length) {
+    grid.replaceChildren(h('div', { class: 'empty' }, 'Nothing here yet.', h('br'), 'Tap + to add your first counter.'));
+    return;
+  }
+  grid.replaceChildren(...S.items.map(tile));
+}
+function tile(item) {
+  const n = todayCount(item.id);
+  const count = h('div', { class: 'count' + (n ? '' : ' zero') }, n);
+  const el = h('div', { class: 'tile', role: 'button', 'aria-label': (item.name || 'Counter') + ', ' + n + ' today' },
+    iconEl(item.icon), count);
+  el.dataset.id = item.id;
+
+  let timer = null, pid = null, sx = 0, sy = 0, held = false, dragging = false, moved = false;
+  const reset = () => { clearTimeout(timer); pid = null; held = dragging = moved = false; G.held = false; el.classList.remove('held', 'dragging'); el.style.transform = ''; };
+
+  el.addEventListener('pointerdown', e => {
+    if (e.button || pid !== null) return;
+    pid = e.pointerId; sx = e.clientX; sy = e.clientY;
+    try { el.setPointerCapture(pid); } catch (err) {}
+    timer = setTimeout(() => { held = true; G.held = true; el.classList.add('held'); buzz(18); }, 420);
+  });
+  el.addEventListener('pointermove', e => {
+    if (e.pointerId !== pid) return;
+    const dist = Math.hypot(e.clientX - sx, e.clientY - sy);
+    if (!held) { if (dist > 10) { moved = true; clearTimeout(timer); } return; }
+    if (!dragging && dist > 8) { dragging = true; el.classList.remove('held'); el.classList.add('dragging'); }
+    if (!dragging) return;
+    el.style.transform = '';
+    const tiles = [...el.parentNode.children];
+    const over = tiles.find(t => {
+      if (t === el) return false;
+      const r = t.getBoundingClientRect();
+      return e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
+    });
+    if (over) (tiles.indexOf(el) < tiles.indexOf(over)) ? over.after(el) : over.before(el);
+    const r = el.getBoundingClientRect();
+    el.style.transform = `translate(${e.clientX - r.left - r.width / 2}px,${e.clientY - r.top - r.height / 2}px) scale(1.1)`;
+  });
+  el.addEventListener('pointerup', e => {
+    if (e.pointerId !== pid) return;
+    if (dragging) {
+      const order = [...el.parentNode.children].map(t => t.dataset.id);
+      S.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+      saveMeta();
+    } else if (held) {
+      reset(); openDetail(item); return;
+    } else if (!moved) {
+      addTap(item.id);
+      const c = todayCount(item.id);
+      count.textContent = c; count.classList.remove('zero');
+      el.classList.remove('pop'); el.offsetWidth; el.classList.add('pop');
+      buzz(8);
+    }
+    reset();
+  });
+  el.addEventListener('pointercancel', reset);
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  return el;
+}
+// once a tile is "held", stop the page from scrolling so it can be dragged
+document.addEventListener('touchmove', e => { if (G.held) e.preventDefault(); }, { passive: false });
+
+function newCounter() {
+  openPicker('New counter', ref => {
+    S.items.push({ id: uid(), name: '', icon: ref });
+    saveMeta(); renderMain();
+    const s = sheets[sheets.length - 1];
+    if (s) { const b = $('.sheet-body', s); if (b && b._redraw) b._redraw(); }
+  });
+}
+
+/* ---------- boot ---------- */
+$('#fab').onclick = newCounter;
+$('#gear').onclick = openSettings;
+const dayCheck = () => { if (startOfDay() !== shownDay && !sheets.length) renderMain(); };
+setInterval(dayCheck, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) dayCheck(); });
+
+(async function boot() {
+  await store.open();
+  const [m, i, e] = await Promise.all([store.get('meta'), store.get('icons'), store.get('events')]);
+  if (m) S = Object.assign(S, m);
+  if (Array.isArray(i)) icons = i;
+  if (Array.isArray(e)) events = e;
+  applyTheme();
+  renderMain();
+})();
+</script>
+</body>
+</html>
