@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Tapsi</string>
+    <string name="widget_label">Tapsi counters</string>
+    <string name="widget_description">Your first five counters. Tap one to count.</string>
+    <string name="widget_empty">Open Tapsi to add counters</string>
 </resources>

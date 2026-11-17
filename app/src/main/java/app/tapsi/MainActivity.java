@@ -125,6 +125,13 @@ public class MainActivity extends Activity {
         fileCallback = null;
     }
 
+    // Coming back to the app: let the page pick up taps made on the widget.
+    @Override
+    protected void onResume() {
+        super.onResume();
+        web.evaluateJavascript("window.tapsiResume && window.tapsiResume()", null);
+    }
+
     // Back closes an open sheet first; if nothing is open it leaves the app.
     @Override
     public void onBackPressed() {
@@ -148,8 +155,36 @@ public class MainActivity extends Activity {
         return "application/octet-stream";
     }
 
-    /** Called from index.html so the system bars match the chosen background colour. */
+    /** Methods index.html can call. */
     private class Bridge {
+        // --- home-screen widget ---
+
+        /** The page sends the first five counters whenever something changes. */
+        @JavascriptInterface
+        public void setWidget(String json) {
+            WidgetStore.saveSnapshot(MainActivity.this, json);
+            CounterWidget.refreshAll(MainActivity.this);
+        }
+
+        /** Taps made on the widget since the page last asked, as a JSON list. */
+        @JavascriptInterface
+        public String takePendingTaps() {
+            return WidgetStore.takePending(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public boolean hasIcon(String id) {
+            return WidgetStore.hasIcon(MainActivity.this, id);
+        }
+
+        @JavascriptInterface
+        public void putIcon(String id, String dataUrl) {
+            WidgetStore.saveIcon(MainActivity.this, id, dataUrl);
+        }
+
+        // --- system bars ---
+
+        /** Makes the system bars match the chosen background colour. */
         @JavascriptInterface
         public void setBg(final String hex, final boolean lightBackground) {
             runOnUiThread(new Runnable() {

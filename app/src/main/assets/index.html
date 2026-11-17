@@ -213,9 +213,48 @@ const PRESETS = ['#ffffff','#111111','#f6efe4','#ffd6e0','#d9ecff','#dff5e1','#e
 let S = { appName: 'Tapsi', bg: '#ffffff', iconSize: 64, numSize: 16, cols: 3, items: [] };
 let icons = [];   // saved custom icons: {id, src}
 let events = [];  // every tap: {i: itemId, t: timestamp}
-const saveMeta = () => store.set('meta', S);
+const saveMeta = () => { store.set('meta', S); pushWidget(); };
 const saveIcons = () => store.set('icons', icons);
-const saveEvents = () => store.set('events', events);
+const saveEvents = () => { store.set('events', events); pushWidget(); };
+
+/* ---------- home-screen widget (Android app only) ---------- */
+let lightBg = true;
+// Tell the widget what the first five counters look like right now.
+function pushWidget() {
+  const A = window.Android;
+  if (!A || !A.setWidget) return;
+  try {
+    const items = S.items.slice(0, 5).map(it => {
+      const o = { id: it.id, n: todayCount(it.id) };
+      const ic = it.icon && it.icon.c && icons.find(x => x.id === it.icon.c);
+      if (ic) { if (!A.hasIcon(ic.id)) A.putIcon(ic.id, ic.src); o.c = ic.id; }
+      else o.e = (it.icon && it.icon.e) || '❔';
+      return o;
+    });
+    A.setWidget(JSON.stringify({ day: startOfDay(), bg: S.bg, light: lightBg, items }));
+  } catch (e) { console.error('widget update failed', e); }
+}
+// Collect taps that were made on the widget while the app was closed.
+function pullWidgetTaps() {
+  const A = window.Android;
+  if (!A || !A.takePendingTaps) return false;
+  try {
+    const known = new Set(S.items.map(x => x.id));
+    const taps = JSON.parse(A.takePendingTaps() || '[]').filter(t => t && known.has(t.i) && t.t > 0);
+    if (!taps.length) return false;
+    for (const t of taps) events.push({ i: t.i, t: t.t });
+    events.sort((a, b) => a.t - b.t);
+    saveEvents();
+    return true;
+  } catch (e) { console.error('widget sync failed', e); return false; }
+}
+window.tapsiResume = () => {
+  if (!booted) return;
+  const changed = pullWidgetTaps();
+  if ((changed || startOfDay() !== shownDay) && !sheets.length) renderMain();
+  else pushWidget();
+};
+let booted = false;
 
 /* ---------- dates ---------- */
 const DAY = 864e5;
@@ -241,6 +280,7 @@ function applyTheme() {
   const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
     .map(c => c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4));
   const lum = .2126 * r + .7152 * g + .0722 * b;
+  lightBg = lum > .4;
   const st = document.documentElement.style;
   st.setProperty('--bg', S.bg);
   st.setProperty('--fg', lum > .4 ? '#111111' : '#ffffff');
@@ -522,6 +562,7 @@ const G = { held: false };
 function renderMain() {
   shownDay = startOfDay();
   renderHeader();
+  pushWidget();
   const grid = $('#grid');
   if (!S.items.length) {
     grid.replaceChildren(h('div', { class: 'empty' }, 'Nothing here yet.', h('br'), 'Tap + to add your first counter.'));
@@ -608,6 +649,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) dayC
   if (m) S = Object.assign(S, m);
   if (Array.isArray(i)) icons = i;
   if (Array.isArray(e)) events = e;
+  booted = true;
+  pullWidgetTaps();
   applyTheme();
   renderMain();
 })();
